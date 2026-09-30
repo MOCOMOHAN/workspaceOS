@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { Plus, MessageSquare, Trash2, Check, X, Edit3, AlignLeft, Bot, Send } from 'lucide-react';
+import { Plus, MessageSquare, Trash2, Check, X, Edit3, AlignLeft, Bot, Send, Download, Upload } from 'lucide-react';
 import './index.css';
 
 const DAYS_IN_CYCLE = 30;
@@ -10,14 +10,17 @@ function App() {
   const [data, setData] = useState(() => {
     const saved = localStorage.getItem('bauhaus-30day-tracker');
     if (saved) {
-      return JSON.parse(saved);
+      const parsed = JSON.parse(saved);
+      if (!parsed.archives) parsed.archives = [];
+      return parsed;
     }
     return {
       tasks: [
         { id: uuidv4(), title: 'Example Task (e.g. Read 10 pages)' },
       ],
       records: {}, 
-      analysis: {} 
+      analysis: {},
+      archives: []
     };
   });
 
@@ -39,6 +42,7 @@ function App() {
   const [chatInput, setChatInput] = useState('');
   const [isChatLoading, setIsChatLoading] = useState(false);
   const chatMessagesEndRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     localStorage.setItem('bauhaus-30day-tracker', JSON.stringify(data));
@@ -125,7 +129,51 @@ function App() {
     });
   };
 
-  // Chat API Handler
+  // --- Export & Import ---
+  const exportData = () => {
+    const cycleData = {
+      timestamp: new Date().toISOString(),
+      tasks: data.tasks,
+      records: data.records,
+      analysis: data.analysis
+    };
+    const blob = new Blob([JSON.stringify(cycleData, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `bauhaus-cycle-${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const importData = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const imported = JSON.parse(e.target.result);
+        if (imported.tasks && imported.records) {
+          // Replace current active view with imported data, but preserve the archives array
+          setData(prev => ({
+            ...prev,
+            tasks: imported.tasks,
+            records: imported.records,
+            analysis: imported.analysis || {}
+          }));
+          alert("Success: Cycle successfully loaded into the live tracker!");
+        } else {
+          alert("Invalid file format. Make sure you are uploading a valid exported cycle.");
+        }
+      } catch (err) {
+        alert("Error parsing JSON file.");
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = null; // reset input
+  };
+
+  // --- Chat API Handler ---
   const sendChatMessage = async (e) => {
     e.preventDefault();
     if (!chatInput.trim() || isChatLoading) return;
@@ -138,12 +186,14 @@ function App() {
     const systemPrompt = {
       role: 'system',
       content: `You are an analytical productivity assistant integrated into a Bauhaus-style 30-day task tracker. 
-Here is the user's current 30-day cycle data:
+Here is the user's current active 30-day cycle data:
 Tasks: ${JSON.stringify(data.tasks)}
 Records (Format: {taskId: {dayNumber: {completed, comment}}}): ${JSON.stringify(data.records)}
 Daily Analysis (Format: {dayNumber: analysisText}): ${JSON.stringify(data.analysis)}
 
-Provide short, encouraging, and highly analytical insights based on this data. Keep responses concise.`
+${data.archives && data.archives.length > 0 ? `Here is the historical LOADED data from past cycles (use this when generating overall analysis/reports across multiple months): ${JSON.stringify(data.archives)}` : ''}
+
+Provide short, encouraging, and highly analytical insights based on this data. When asked for an end analysis or report, make sure to consider BOTH the current active cycle and all historical loaded cycles to show overall progress and trends. Keep responses concise.`
     };
 
     try {
@@ -203,9 +253,26 @@ Provide short, encouraging, and highly analytical insights based on this data. K
 
   return (
     <div className="app-container">
-      <div className="header-bar stacked-box stacked-box-yellow" style={{ padding: '1.5rem', marginBottom: '1rem' }}>
-        <h1 className="header-title">30-Day Cycle Tracker</h1>
-        <div style={{ fontWeight: 600 }}>Bauhaus Edition</div>
+      <div className="header-bar stacked-box stacked-box-yellow" style={{ padding: '1.5rem', marginBottom: '1rem', display: 'flex', flexWrap: 'wrap', gap: '1rem' }}>
+        <div>
+          <h1 className="header-title">30-Day Cycle Tracker</h1>
+          <div style={{ fontWeight: 600 }}>Bauhaus Edition</div>
+        </div>
+        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+          <button className="btn" onClick={exportData} style={{ background: 'var(--b-white)' }}>
+            <Download size={18} /> Export Cycle
+          </button>
+          <button className="btn" onClick={() => fileInputRef.current?.click()} style={{ background: 'var(--b-blue)', color: 'white' }}>
+            <Upload size={18} /> Import Cycle
+          </button>
+          <input 
+            type="file" 
+            accept=".json" 
+            style={{ display: 'none' }} 
+            ref={fileInputRef}
+            onChange={importData}
+          />
+        </div>
       </div>
 
       {/* Stats Dashboard */}
@@ -375,7 +442,7 @@ Provide short, encouraging, and highly analytical insights based on this data. K
             <input 
               type="text" 
               className="input-field" 
-              placeholder="Ask about your habits..." 
+              placeholder="Ask for an analysis report..." 
               value={chatInput}
               onChange={(e) => setChatInput(e.target.value)}
               disabled={isChatLoading}
