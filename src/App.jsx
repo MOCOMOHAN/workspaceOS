@@ -140,6 +140,11 @@ Make it sound powerful, relentless, and Bauhaus-brutal. KEEP IT UNDER 15 WORDS. 
     }
   };
 
+  const handleTickerCycle = () => {
+    const randomQuote = quotes[Math.floor(Math.random() * quotes.length)];
+    setTickerQuote(randomQuote);
+  };
+
   const addTask = (e) => {
     e.preventDefault();
     if (!newTaskTitle.trim()) return;
@@ -303,7 +308,7 @@ Provide short, encouraging, and highly analytical insights based on this data. K
     <>
       <div className="ticker-container">
         <div className="ticker-scroll-wrapper">
-          <div className="ticker-scroll">
+          <div className="ticker-scroll" onAnimationIteration={handleTickerCycle}>
             {tickerQuote}
           </div>
         </div>
