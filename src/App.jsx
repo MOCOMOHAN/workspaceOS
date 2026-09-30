@@ -27,9 +27,15 @@ function App() {
 
   // Chat State
   const [isChatOpen, setIsChatOpen] = useState(false);
-  const [chatMessages, setChatMessages] = useState([
-    { role: 'assistant', content: 'Hello! I am your AI assistant. I can analyze your 30-day habits and answer questions.' }
-  ]);
+  const [chatMessages, setChatMessages] = useState(() => {
+    const savedChat = localStorage.getItem('bauhaus-chat-history');
+    if (savedChat) {
+      return JSON.parse(savedChat);
+    }
+    return [
+      { role: 'assistant', content: 'Hello! I am your AI assistant. I can analyze your 30-day habits and answer questions.' }
+    ];
+  });
   const [chatInput, setChatInput] = useState('');
   const [isChatLoading, setIsChatLoading] = useState(false);
   const chatMessagesEndRef = useRef(null);
@@ -37,6 +43,10 @@ function App() {
   useEffect(() => {
     localStorage.setItem('bauhaus-30day-tracker', JSON.stringify(data));
   }, [data]);
+
+  useEffect(() => {
+    localStorage.setItem('bauhaus-chat-history', JSON.stringify(chatMessages));
+  }, [chatMessages]);
 
   useEffect(() => {
     if (isChatOpen) {
@@ -158,11 +168,65 @@ Provide short, encouraging, and highly analytical insights based on this data. K
     }
   };
 
+  // --- STATS CALCULATIONS ---
+  const totalTasks = data.tasks.length;
+  const totalChecksPossible = totalTasks * DAYS_IN_CYCLE;
+  let totalCompletedChecks = 0;
+  let longestPerfectStreak = 0;
+  let currentPerfectStreak = 0;
+
+  if (totalTasks > 0) {
+    for (let day = 1; day <= DAYS_IN_CYCLE; day++) {
+      let dayCompletedCount = 0;
+      data.tasks.forEach(task => {
+        if (data.records[task.id] && data.records[task.id][day]?.completed) {
+          totalCompletedChecks++;
+          dayCompletedCount++;
+        }
+      });
+      
+      // A perfect streak is when ALL tasks are completed on that day
+      if (dayCompletedCount === totalTasks && totalTasks > 0) {
+        currentPerfectStreak++;
+        if (currentPerfectStreak > longestPerfectStreak) {
+          longestPerfectStreak = currentPerfectStreak;
+        }
+      } else {
+        currentPerfectStreak = 0;
+      }
+    }
+  }
+
+  const overallProgressPercentage = totalChecksPossible === 0 
+    ? 0 
+    : Math.round((totalCompletedChecks / totalChecksPossible) * 100);
+
   return (
     <div className="app-container">
       <div className="header-bar stacked-box stacked-box-yellow" style={{ padding: '1.5rem', marginBottom: '1rem' }}>
         <h1 className="header-title">30-Day Cycle Tracker</h1>
         <div style={{ fontWeight: 600 }}>Bauhaus Edition</div>
+      </div>
+
+      {/* Stats Dashboard */}
+      <div className="stats-dashboard">
+        <div className="stat-card stacked-box stacked-box-yellow">
+          <div className="stat-label">Cycle Progress</div>
+          <div className="stat-value">{overallProgressPercentage}%</div>
+          <div className="progress-bar-wrapper">
+            <div className="progress-bar-fill" style={{ width: `${overallProgressPercentage}%` }}></div>
+          </div>
+        </div>
+        <div className="stat-card stacked-box stacked-box-blue">
+          <div className="stat-label">Total Habits Completed</div>
+          <div className="stat-value">{totalCompletedChecks}</div>
+          <div style={{ fontWeight: '600' }}>Out of {totalChecksPossible}</div>
+        </div>
+        <div className="stat-card stacked-box stacked-box-red">
+          <div className="stat-label">Longest Perfect Streak</div>
+          <div className="stat-value">{longestPerfectStreak} <span style={{ fontSize: '1rem' }}>days</span></div>
+          <div style={{ fontWeight: '600' }}>Consecutive days all tasks checked</div>
+        </div>
       </div>
 
       <div className="grid-container-wrapper">
@@ -202,6 +266,27 @@ Provide short, encouraging, and highly analytical insights based on this data. K
                       <Trash2 size={14} />
                     </button>
                   </div>
+                  {/* Task Progress Bar */}
+                  {(() => {
+                    let taskCompleted = 0;
+                    for (let day = 1; day <= DAYS_IN_CYCLE; day++) {
+                       if (data.records[task.id] && data.records[task.id][day]?.completed) {
+                         taskCompleted++;
+                       }
+                    }
+                    const percent = Math.round((taskCompleted / DAYS_IN_CYCLE) * 100);
+                    return (
+                      <div className="task-progress-wrapper">
+                        <div style={{ fontSize: '0.8rem', fontWeight: 600, display: 'flex', justifyContent: 'space-between' }}>
+                          <span>Completion</span>
+                          <span>{percent}%</span>
+                        </div>
+                        <div className="task-progress-bar">
+                          <div className="task-progress-fill" style={{ width: `${percent}%` }}></div>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </td>
                 {DAYS_ARRAY.map(day => {
                   const cellRecord = (data.records[task.id] && data.records[task.id][day]) || { completed: false, comment: '' };
