@@ -10,7 +10,7 @@ const DAYS_ARRAY = Array.from({ length: DAYS_IN_CYCLE }, (_, i) => i + 1);
 
 function App() {
   const [data, setData] = useState(() => {
-    const saved = localStorage.getItem('bauhaus-30day-tracker');
+    const saved = localStorage.getItem('bauhaus-30day-tracker-final');
     if (saved) {
       const parsed = JSON.parse(saved);
       if (!parsed.archives) parsed.archives = [];
@@ -34,7 +34,7 @@ function App() {
   // Chat State
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [chatMessages, setChatMessages] = useState(() => {
-    const savedChat = localStorage.getItem('bauhaus-chat-history');
+    const savedChat = localStorage.getItem('bauhaus-chat-history-final');
     if (savedChat) {
       return JSON.parse(savedChat);
     }
@@ -114,11 +114,11 @@ function App() {
     return () => clearInterval(interval);
   }, [gifs]);
   useEffect(() => {
-    localStorage.setItem('bauhaus-30day-tracker', JSON.stringify(data));
+    localStorage.setItem('bauhaus-30day-tracker-final', JSON.stringify(data));
   }, [data]);
 
   useEffect(() => {
-    localStorage.setItem('bauhaus-chat-history', JSON.stringify(chatMessages));
+    localStorage.setItem('bauhaus-chat-history-final', JSON.stringify(chatMessages));
   }, [chatMessages]);
 
   useEffect(() => {
