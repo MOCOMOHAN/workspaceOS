@@ -29,6 +29,7 @@ function App() {
   const [activeCell, setActiveCell] = useState(null);
   const [activeDay, setActiveDay] = useState(null);
   const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [activeTab, setActiveTab] = useState('tracker');
 
   // Chat State
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -322,22 +323,13 @@ Make it sound powerful, relentless, and Bauhaus-brutal. KEEP IT UNDER 15 WORDS. 
 
   // --- TTS Handler ---
   const playTTS = async (text) => {
-    // 1. Fix pronunciation for MOCO
     const spokenText = text.replace(/MOCO/gi, 'Moko');
-
-    // 2. Split text into smaller chunks (sentences) to reduce CPU processing delay
     const sentences = spokenText.match(/[^.!?\n]+[.!?\n]*/g) || [spokenText];
     const queue = [...sentences];
+    let nextAudioPromise = null;
 
-    const playNext = async () => {
-      if (queue.length === 0) return;
-      
-      const sentence = queue.shift();
-      if (!sentence.trim()) {
-        playNext();
-        return;
-      }
-
+    const fetchAudio = async (sentence) => {
+      if (!sentence.trim()) return null;
       try {
         const response = await fetch('http://localhost:8880/v1/audio/speech', {
           method: 'POST',
@@ -352,19 +344,47 @@ Make it sound powerful, relentless, and Bauhaus-brutal. KEEP IT UNDER 15 WORDS. 
         });
         if (response.ok) {
           const blob = await response.blob();
-          const audio = new Audio(URL.createObjectURL(blob));
-          audio.onended = playNext; // Automatically trigger next chunk when finished
-          audio.play();
-        } else {
-          playNext(); // Skip on error
+          return new Audio(URL.createObjectURL(blob));
         }
       } catch (err) {
         console.error('Kokoro TTS error:', err);
-        playNext();
+      }
+      return null;
+    };
+
+    const playNext = async () => {
+      if (queue.length === 0 && !nextAudioPromise) return;
+      
+      const audio = nextAudioPromise ? await nextAudioPromise : await fetchAudio(queue.shift());
+      
+      // PRE-FETCH the next chunk in the background immediately!
+      if (queue.length > 0) {
+        nextAudioPromise = fetchAudio(queue.shift());
+      } else {
+        nextAudioPromise = null;
+      }
+
+      if (audio) {
+        let nextStarted = false;
+        // Aggressively overlap the next sentence to kill the trailing silence
+        audio.ontimeupdate = () => {
+           if (audio.duration && audio.duration - audio.currentTime < 0.35 && !nextStarted) {
+              nextStarted = true;
+              playNext();
+           }
+        };
+        audio.onended = () => {
+           if (!nextStarted) {
+             nextStarted = true;
+             playNext();
+           }
+        };
+        audio.play();
+      } else {
+        playNext(); // skip on fail
       }
     };
 
-    // Start playback sequence
     playNext();
   };
 
@@ -460,8 +480,24 @@ IMPORTANT AUTOMATION: If the user explicitly asks you to add a task, or if you r
       <div className="app-container">
 
         <div className="header-bar stacked-box stacked-box-yellow" style={{ padding: '1.5rem', marginBottom: '1rem', display: 'flex', flexWrap: 'wrap', gap: '1rem' }}>
-          <div>
-            <h1 className="header-title">30-Day Cycle Tracker</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+            <h1 className="header-title" style={{ margin: 0 }}>30-Day Cycle</h1>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button 
+                className="btn" 
+                onClick={() => setActiveTab('tracker')}
+                style={{ background: activeTab === 'tracker' ? 'var(--b-black)' : 'var(--b-white)', color: activeTab === 'tracker' ? 'white' : 'var(--b-black)' }}
+              >
+                TRACKER
+              </button>
+              <button 
+                className="btn" 
+                onClick={() => setActiveTab('visualize')}
+                style={{ background: activeTab === 'visualize' ? 'var(--b-black)' : 'var(--b-white)', color: activeTab === 'visualize' ? 'white' : 'var(--b-black)' }}
+              >
+                VISUALIZE
+              </button>
+            </div>
           </div>
           <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginLeft: 'auto' }}>
             <button
@@ -506,8 +542,9 @@ IMPORTANT AUTOMATION: If the user explicitly asks you to add a task, or if you r
           </div>
         </div>
 
-        <div className="grid-container-wrapper">
-          <table className="tracker-table">
+        {activeTab === 'tracker' && (
+          <div className="grid-container-wrapper">
+            <table className="tracker-table">
             <thead>
               <tr>
                 <th className="task-col">Habits & Tasks</th>
@@ -574,7 +611,7 @@ IMPORTANT AUTOMATION: If the user explicitly asks you to add a task, or if you r
                         key={day}
                         className={`check-cell ${cellRecord.completed ? 'completed' : ''}`}
                       >
-                        <div className="check-cell-content" onClick={() => toggleCheck(task.id, day)}>
+                        <div className="check-cell-content" onClick={() => setActiveCell({ taskId: task.id, day })}>
                           <div className="check-icon">
                             {cellRecord.completed && <Check size={16} color="white" />}
                           </div>
@@ -582,13 +619,9 @@ IMPORTANT AUTOMATION: If the user explicitly asks you to add a task, or if you r
                             <MessageSquare size={12} className="comment-indicator" />
                           )}
 
-                          {/* Hover/Click area for opening comment modal */}
+                          {/* Keep hover indicator so user knows it's editable */}
                           <div
                             style={{ position: 'absolute', right: 4, bottom: 4, cursor: 'pointer', padding: '2px' }}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setActiveCell({ taskId: task.id, day });
-                            }}
                             title="Add/Edit Comment"
                           >
                             <Edit3 size={14} opacity={0.4} />
@@ -620,6 +653,67 @@ IMPORTANT AUTOMATION: If the user explicitly asks you to add a task, or if you r
             </tbody>
           </table>
         </div>
+        )}
+
+        {activeTab === 'visualize' && (
+          <div className="stacked-box stacked-box-blue" style={{ padding: '2rem', marginTop: '1rem' }}>
+            <h2 style={{ marginTop: 0, textTransform: 'uppercase', borderBottom: '4px solid var(--b-black)', paddingBottom: '0.5rem', display: 'inline-block' }}>Intensity Heatmap</h2>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)', gap: '1rem', marginTop: '2rem' }}>
+              {DAYS_ARRAY.map(day => {
+                let completedTasks = 0;
+                data.tasks.forEach(task => {
+                  if (data.records[task.id] && data.records[task.id][day]?.completed) {
+                    completedTasks++;
+                  }
+                });
+                const percentage = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
+                let bgColor = 'var(--b-white)';
+                if (percentage > 0) {
+                  // Direct intensity mixing: higher percentage = more Orange
+                  bgColor = `color-mix(in srgb, #FF6B00 ${percentage}%, var(--b-white))`;
+                }
+
+                return (
+                  <div 
+                    key={day}
+                    style={{ 
+                      aspectRatio: '1', 
+                      backgroundColor: bgColor,
+                      border: '3px solid var(--b-black)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontWeight: 'bold',
+                      fontSize: '1.2rem',
+                      boxShadow: '4px 4px 0 var(--b-black)',
+                      cursor: 'help'
+                    }}
+                    title={`Day ${day}: ${Math.round(percentage)}% Completed`}
+                  >
+                    {day}
+                  </div>
+                );
+              })}
+            </div>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: '3rem', fontWeight: 'bold' }}>
+              <div style={{ marginBottom: '0.5rem' }}>COMPLETION INTENSITY</div>
+              <div style={{ 
+                width: '100%', 
+                maxWidth: '400px', 
+                height: '24px', 
+                background: 'linear-gradient(to right, var(--b-white), #FF6B00)',
+                border: '3px solid var(--b-black)',
+                boxShadow: '4px 4px 0 var(--b-black)'
+              }}></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', maxWidth: '400px', marginTop: '0.5rem' }}>
+                <span>0%</span>
+                <span>50%</span>
+                <span>100%</span>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Chat Floating Button */}
         <div className="chat-fab" onClick={() => setIsChatOpen(!isChatOpen)}>
