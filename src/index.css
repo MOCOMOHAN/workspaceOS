@@ -7,8 +7,19 @@
   --b-black: #1E1E1E;
   --b-white: #F4F4F2;
   --b-bg: #DFDFD5;
+  --dot-color: rgba(30, 30, 30, 0.4);
   
   --font: 'Space Grotesk', sans-serif;
+}
+
+[data-theme="dark"] {
+  --b-red: #ff5740;
+  --b-blue: #407fb5;
+  --b-yellow: #ffdb4d;
+  --b-black: #F4F4F2;
+  --b-white: #1a1a1a;
+  --b-bg: #121212;
+  --dot-color: rgba(244, 244, 242, 0.1);
 }
 
 * {
@@ -22,8 +33,8 @@ body {
   background-color: var(--b-bg);
   color: var(--b-black);
   background-image: 
-    radial-gradient(var(--b-black) 1px, transparent 1px),
-    radial-gradient(var(--b-black) 1px, transparent 1px);
+    radial-gradient(var(--dot-color) 1px, transparent 1px),
+    radial-gradient(var(--dot-color) 1px, transparent 1px);
   background-size: 40px 40px;
   background-position: 0 0, 20px 20px;
   background-attachment: fixed;
@@ -90,7 +101,7 @@ body {
 }
 .input-field:focus {
   outline: none;
-  background: #fff;
+  background: var(--b-white);
   border-color: var(--b-blue);
 }
 
@@ -292,7 +303,7 @@ body {
 
 .add-task-row td {
   padding: 1rem;
-  background: #E8E8E8;
+  background: var(--b-bg);
 }
 
 .analysis-textarea, .comment-textarea {
@@ -515,4 +526,49 @@ body {
 .ticker-btn:active {
   transform: translate(1px, 1px);
   box-shadow: 0px 0px 0px var(--b-white);
+}
+
+/* Fullscreen GIF Background */
+.fullscreen-gif-bg {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: -1;
+  overflow: hidden;
+  background-color: var(--b-bg);
+}
+
+.fullscreen-gif-bg img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  opacity: 0.35;
+  transition: opacity 0.5s ease;
+}
+
+/* Bauhaus Theme Switch */
+.theme-switch {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 3px solid var(--b-black);
+  background: linear-gradient(to right, var(--b-black) 50%, var(--b-white) 50%);
+  cursor: pointer;
+  transition: transform 0.6s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+  box-shadow: 3px 3px 0px var(--b-black);
+  outline: none;
+}
+
+.theme-switch:hover {
+  transform: scale(1.1);
+}
+
+.theme-switch.dark {
+  transform: rotate(180deg);
+}
+.theme-switch.dark:hover {
+  transform: rotate(180deg) scale(1.1);
 }
