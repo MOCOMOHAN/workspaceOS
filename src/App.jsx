@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { Plus, MessageSquare, Trash2, Check, X, Edit3, AlignLeft, Bot, Send, Download, Upload, Zap } from 'lucide-react';
+import { Plus, MessageSquare, Trash2, Check, X, Edit3, AlignLeft, Bot, Send, Download, Upload, Zap, PowerOff } from 'lucide-react';
 import { quotes } from './quotes.js';
 import userProfile from './profile.json';
 import './index.css';
@@ -398,18 +398,38 @@ Make it sound powerful, relentless, and Bauhaus-brutal. KEEP IT UNDER 15 WORDS. 
     setChatInput('');
     setIsChatLoading(true);
 
+    // Compress records to save LLM context length
+    const compactRecords = {};
+    Object.keys(data.records).forEach(taskId => {
+      const taskData = data.records[taskId];
+      const compactTaskData = {};
+      Object.keys(taskData).forEach(day => {
+        const record = taskData[day];
+        if (record.completed || (record.comment && record.comment.trim() !== '')) {
+          compactTaskData[day] = {
+            STATUS: record.completed ? "YES - COMPLETED" : "NO - NOT COMPLETED",
+            comment: record.comment || "no comment"
+          };
+        }
+      });
+      if (Object.keys(compactTaskData).length > 0) {
+        compactRecords[taskId] = compactTaskData;
+      }
+    });
+
     const systemPrompt = {
       role: 'system',
       content: `You are an analytical productivity assistant integrated into a Bauhaus-style 30-day task tracker. 
 User Profile Details: ${JSON.stringify(userProfile)}
 Here is the user's current active 30-day cycle data:
 Tasks: ${JSON.stringify(data.tasks)}
-Records (Format: {taskId: {dayNumber: {completed, comment}}}): ${JSON.stringify(data.records)}
+Records (Only active days are shown. Format: {taskId: {dayNumber: {completed, comment}}}): ${JSON.stringify(compactRecords)}
 Daily Analysis (Format: {dayNumber: analysisText}): ${JSON.stringify(data.analysis)}
 
 ${data.archives && data.archives.length > 0 ? `Here is the historical LOADED data from past cycles: ${JSON.stringify(data.archives)}` : ''}
 
 Provide short, encouraging, and highly analytical insights based on this data. Keep responses concise.
+IMPORTANT: The 'completed' boolean in Records is the absolute ground truth for whether a task was done. Do not say a task is "Not Completed" if its 'completed' value is true, regardless of what the comment says.
 IMPORTANT AUTOMATION: If the user explicitly asks you to add a task, or if you recommend a new task, you can automatically add it to their tracker by outputting exactly:
 [ADD_TASK: "The Name of The Task"]
 (You can use this multiple times to add multiple tasks).`
@@ -457,6 +477,18 @@ IMPORTANT AUTOMATION: If the user explicitly asks you to add a task, or if you r
       setChatMessages([...newMessages, { role: 'assistant', content: 'Error connecting to local Ollama. Make sure llama3.1:8b is running at http://localhost:11434/' }]);
     } finally {
       setIsChatLoading(false);
+    }
+  };
+
+  // --- SYSTEM SHUTDOWN ---
+  const shutdownSystem = async () => {
+    if (window.confirm("Are you sure you want to completely shut down the dashboard, LLM, and Docker Engine?")) {
+      try {
+        await fetch('/api/shutdown', { method: 'POST' });
+        document.body.innerHTML = '<div style="background:#1E1E1E; color:#F4F4F2; text-align:center; height:100vh; display:flex; align-items:center; justify-content:center; flex-direction:column; font-family:sans-serif;"><h1>SYSTEM SHUTDOWN COMPLETE</h1><p>Ollama, Docker, and the Dashboard have been safely terminated.</p><p>You may now close this window.</p></div>';
+      } catch (err) {
+        console.error("Shutdown failed", err);
+      }
     }
   };
 
@@ -510,6 +542,9 @@ IMPORTANT AUTOMATION: If the user explicitly asks you to add a task, or if you r
             </button>
             <button className="btn" onClick={() => fileInputRef.current?.click()} style={{ background: 'var(--b-blue)', color: 'white' }}>
               <Upload size={18} /> Import Cycle
+            </button>
+            <button className="btn" onClick={shutdownSystem} style={{ background: 'var(--b-red)', color: 'white', border: '3px solid var(--b-black)' }} title="Shutdown Complete Environment">
+              <PowerOff size={18} /> SHUTDOWN
             </button>
             <input
               type="file"
